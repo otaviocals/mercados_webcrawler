@@ -1,0 +1,6 @@
+data_tables/
+build/
+dist/
+__pycache__/
+ghostdriver.log
+config.txt
