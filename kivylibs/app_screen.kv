@@ -1,12 +1,16 @@
 <AppScreen>
     BoxLayout:
         orientation: "horizontal"
-        Image:
-            source: ""
-            size_hint: None, None
-            size: 150,200
-            pos_hint: {"center_y": 0.5, "center_x": 0.5}
-            id: ce_logo
+        XButton:
+            size: 150, 200
+            background_color:(0,0,0,1)
+            on_release:root._open_link()
+            Image:
+                source: "./logo/logo.png"
+                pos:self.parent.pos
+                width:self.parent.width
+                height:self.parent.height
+                id: ce_logo
         Label:
             text:"Webscraper\nMercados - Google API"
             markup: True

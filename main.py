@@ -36,8 +36,6 @@ from kivy.lang import Builder
 from pylibs.file import XFolder
 from pylibs.xpopup import XPopup
 import pylibs.tools
-#import pylibs.win32timezone
-print("hehe")
 from time import sleep
 from unidecode import unidecode
 from pyscripts.google_api_scraper import GoogleApiScraper
@@ -47,6 +45,11 @@ import gc
 import sys
 import os
 import shutil
+import webbrowser
+import requests
+import xml.etree.ElementTree as ET
+import json
+from pprint import pprint
 
 ######################
 #    Pre-Settings    #
@@ -55,7 +58,7 @@ import shutil
 #Setting configurations
 
 Config.set("kivy","log_enable","0")
-Config.set("kivy","log_level","critical")
+Config.set("kivy","log_level","debug")
 Config.set("graphics","position","custom")
 Config.set("graphics","top","10")
 Config.set("graphics","left","10")
@@ -80,6 +83,7 @@ if current_os.startswith("linux"):
 elif current_os.startswith("win32") or current_os.startswith("cygwin"):
     slash = "\\"
     phantom = "phantomjs\\phantomjs.exe"
+    import pylibs.win32timezone
 elif current_os.startswith("darwin"):
     slash = "/"
     phantom = "phantomjs/phantomjs"
@@ -102,7 +106,11 @@ r_libs_path = resource_path("rlibs")
 kivi_app_path = resource_path("kivylibs"+slash+"app_screen.kv")
 config_path = os.path.abspath(".")+slash+"config.txt"
 
-#print(os.path.abspath("."))
+#google_maps_api
+api_key="AIzaSyCMpuUjGHTIMUvDeD-8NBSHzfiqf6Qi2UQ"
+query_string="hipermercado+carrefour+am"
+
+query_response = requests.get("http://maps.googleapis.com/maps/api/place/textsearch/xml?query="+query_string+"&key="+api_key)
 
 #Building GUI
 
@@ -134,35 +142,36 @@ class AppScreen(GridLayout):
         log_file.write("Starting at "+str(datetime.datetime.now())+"\n")
         self.ids.log_output.text += "Starting at "+str(datetime.datetime.now())+"\n"
 
-        print("Webscraper Starting...")
-        log_file.write("Webscraper Starting...\n")
-        self.ids.log_output.text += "Websccraper Starting...\n"
-
         start_time_seconds = time.time()
         self.ids.start_button.disabled = True
 
     #Running webscraper
 
-        str_output_logger = []
-        new_data = Webscraper(sel_folder,log_file,str_output_logger,phantom_path)
-        self.ids.log_output.text += "".join(str_output_logger)
-        gc.collect()
+        #str_output_logger = []
+        #new_data = Webscraper(sel_folder,log_file,str_output_logger,phantom_path)
+        #self.ids.log_output.text += "".join(str_output_logger)
+        #gc.collect()
 
     #Running R scripts
 
         r_verify = shutil.which("Rscript")
 
         if(not r_verify == None):
-            print("Running Analysis...")
-            log_file.write("Running Analysis...\n")
-            self.ids.log_output.text += "Running Analysis...\n"
+
+            print("Obtaining Google Data...")
+            log_file.write("Obtaining Google Data...\n")
+            self.ids.log_output.text += "Obtaining Google Data...\n"
 
             log_file.close()
 
-            r_output = subprocess.check_output(["Rscript",r_script_path+slash+"analysis.R", slash, sel_folder,config_path, r_script_path,r_libs_path, sel_folder+slash+"logs"+slash+"history.log"],universal_newlines=True)
+            r_output = subprocess.check_output(["Rscript",r_script_path+slash+"google_places_api.R", api_key, slash, sel_folder, r_script_path,r_libs_path, sel_folder+slash+"logs"+slash+"history.log"],universal_newlines=True)
             print(r_output)
 
             log_file = open((sel_folder+slash+"logs"+slash+"history.log"),"a",encoding="utf-8")
+
+            print("Saving Data...")
+            log_file.write("Saving Data...\n")
+            self.ids.log_output.text += "Saving Data...\n"
 
         else:
             print("R compiler not found.")
@@ -197,16 +206,17 @@ class AppScreen(GridLayout):
     def start(self,*args):
         global event
         if args[1] == "down":
-            self.ids.check_button.disabled = True
             self.ids.folder_button.disabled = True
             event = Clock.schedule_once(self.scrap)
         if args[1] == "normal":
-            self.ids.check_button.disabled = False
             self.ids.folder_button.disabled = False
             Clock.unschedule(event)
 
     def update_button(self,event):
         self.ToggleButton.text="Stop"
+
+    def _open_link(self):
+        webbrowser.open("http://www.calsemporium.com")
 
 #Directory selection
 
