@@ -58,7 +58,7 @@ from pprint import pprint
 #Setting configurations
 
 Config.set("kivy","log_enable","0")
-Config.set("kivy","log_level","debug")
+Config.set("kivy","log_level","critical")
 Config.set("graphics","position","custom")
 Config.set("graphics","top","10")
 Config.set("graphics","left","10")
@@ -239,7 +239,7 @@ class AppScreen(GridLayout):
         super(AppScreen, self).__init__(**kwargs)
 
         Window.size = (450,750)
-        Window.set_title("Webscraper SUSEP")
+        Window.set_title("Webscraper Mercados")
 
 
         self.cols = 1
@@ -261,7 +261,7 @@ class SUSEP(App):
     def build(self):
         self.icon = logo_path
         self.resizable = 0
-        self.title = "Webscraper SUSEP"
+        self.title = "Webscraper Mercados"
         self.log_enable = 0
         return AppScreen()
 

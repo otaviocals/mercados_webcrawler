@@ -15,6 +15,7 @@ setwd(data_folder)
 #Loading libraries
 
 package_list <- c("Rcpp","openxlsx","stringi","XML","curl","httr")
+suppressWarnings(suppressMessages(
 	for( i in 1:length(package_list))
 	{
 		if (!require(package_list[i],character.only = TRUE,lib.loc=r_libs))
@@ -22,12 +23,15 @@ package_list <- c("Rcpp","openxlsx","stringi","XML","curl","httr")
 		      	install.packages(package_list[i],dep=TRUE,repos="http://cran.us.r-project.org",lib=r_libs)
 			        if(!require(package_list[i],character.only = TRUE,lib.loc=r_libs)) stop("Package not found")
 			}
-	}
+	}           ))
 
 
 #Get Place API function
 
 get_place <- function(empresa,tipo_merc,uf,region){
+
+    oldw<-getOption("warn")
+    options(warn = -1)
 
     #Setting Filter
     if(tipo_merc=="hipermercado")
@@ -107,7 +111,7 @@ get_place <- function(empresa,tipo_merc,uf,region){
 
     for(i in 1:num_results)
         {
-            id <- unlist(xpathApply(query_result, paste0("//result[",i,"]/id"), xmlValue))
+            id <- unlist(xpathApply(query_result, paste0("//result[",i,"]/place_id"), xmlValue))
             name <- unlist(xpathApply(query_result, paste0("//result[",i,"]/name"), xmlValue))
             type <- unlist(xpathApply(query_result, paste0("//result[",i,"]/type[1]"), xmlValue))
             address <- unlist(xpathApply(query_result, paste0("//result[",i,"]/formatted_address"), xmlValue))
@@ -148,16 +152,55 @@ get_place <- function(empresa,tipo_merc,uf,region){
                     query_table <- rbind(query_table,result_table)
                 }
         }
-    #name <- xpathApply(query_result, "//result/name", xmlValue)
-    #type <- xpathApply(query_result, "//result/type[1]", xmlValue)
-    #form_address <- xpathApply(query_result, "//result/formatted_address", xmlValue)
-    #rating <- xpathApply(query_result, "//result/rating", xmlValue)
-    #id <- xpathApply(query_result, "//result/id", xmlValue)
-    #
-    #query_table <- cbind(id,name,type,form_address,rating)
+    options(warn=oldw)
 
     return(query_table)
 }
+
+get_comments <- function(id_table)
+    {
+        oldw<-getOption("warn")
+        options(warn = -1)
+
+        comments_table <- data.frame(id=character(0),uf=character(0),rating=character(0),comment=character(0))
+        for(i in 1:nrow(id_table))
+            {
+                query_url <- paste0("https://maps.googleapis.com/maps/api/place/details/xml?placeid=",id_table[i,1],"&key=",api_key)
+
+                
+                xml.url <- GET(query_url, accept_xml())
+
+            #XML Parsing
+                query_result <- xmlTreeParse(xml.url, useInternalNodes=TRUE)
+                num_comments <- xpathApply(query_result, "count(//result/review)", xmlValue)
+                #print(num_comments)
+                if(num_comments>0)
+                    {
+                        for(j in 1:num_comments)
+                            {
+                                id <- as.character(id_table[i,1])
+                                uf <- as.character(id_table[i,2])
+                                rating <- unlist(xpathApply(query_result, paste0("//result/review[",j,"]/rating"), xmlValue))
+                                if(is.null(rating))
+                                    {
+                                        rating <- NA
+                                    }
+                                comment <- unlist(xpathApply(query_result, paste0("//result/review[",j,"]/text"), xmlValue))
+                                comment <-stri_trans_general(comment,"Latin-ASCII")
+                                if(is.null(comment))
+                                    {
+                                        comment <- ""
+                                    }
+
+                                row_data <- cbind(id,uf,rating,comment)
+                                comments_table <- rbind(comments_table,row_data)
+                                #print(row_data)
+                            }
+                    }
+            }
+        options(warn=oldw)
+        return(comments_table)
+    }
 
 #Creating Workbook
 
@@ -204,8 +247,8 @@ uf_city <- list(
                 )
 
 
-#length_uf <- length(uf_city)
-length_uf <- 4
+length_uf <- length(uf_city)
+#length_uf <- 4
 
 
 ##################
@@ -536,9 +579,21 @@ writeData(workbook,"mercados_pao_de_acucar",format(mean_merc,decimal.mark=","),s
 pao_de_acucar_ids <- rbind(table_super_merc,table_mini_merc)[,c(1,3)]
 
 
-#carrefour_ids[] <- lapply(carrefour_ids,as.character)
-print(carrefour_ids)
-print(as.character(table_super_merc$id))
+#Getting Comments
+
+carrefour_comments <- get_comments(carrefour_ids)
+extra_comments <- get_comments(extra_ids)
+pao_de_acucar_comments <- get_comments(pao_de_acucar_ids)
+
+#Saving Comments
+write.csv2(carrefour_comments,paste0("proc_data",slash,"comments_carrefour.csv"))
+write.csv2(extra_comments,paste0("proc_data",slash,"comments_extra.csv"))
+write.csv2(pao_de_acucar_comments,paste0("proc_data",slash,"comments_pao_de_acucar.csv"))
+
+
+writeDataTable(workbook,"comentarios_carrefour",format(carrefour_comments,decimal.mark=","))
+writeDataTable(workbook,"comentarios_extra",format(extra_comments,decimal.mark=","))
+writeDataTable(workbook,"comentarios_pao_de_acucar",format(pao_de_acucar_comments,decimal.mark=","))
 
 saveWorkbook(workbook,paste0("Avaliacao-Mercados-",Sys.Date(),".xlsx"),overwrite=TRUE)
 
