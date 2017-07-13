@@ -26,7 +26,12 @@ suppressWarnings(suppressMessages(
 	}           ))
 
 
-#Get Place API function
+
+##################
+#   Get Places   #
+##################
+
+
 
 get_place <- function(empresa,tipo_merc,uf,region){
 
@@ -54,7 +59,7 @@ get_place <- function(empresa,tipo_merc,uf,region){
 
     if(empresa=="carrefour")
         {
-            filter_strings_neg <- c(filter_strings_neg,"extra","Extra","p.o","P.o","a..car","A..car")
+            filter_strings_neg <- c(filter_strings_neg,"extra","Extra","p.o","P.o","a..car","A..car","dia","Dia")
         }
     else if(empresa=="extra")
         {
@@ -107,12 +112,36 @@ get_place <- function(empresa,tipo_merc,uf,region){
     #print(num_results)
 
     #Data Processing
-    query_table <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+    query_table <- data.frame(id=character(0),name=character(0),class=character(0),numrating=character(0),rating=character(0),address=character(0))
 
     for(i in 1:num_results)
         {
             id <- unlist(xpathApply(query_result, paste0("//result[",i,"]/place_id"), xmlValue))
-            name <- unlist(xpathApply(query_result, paste0("//result[",i,"]/name"), xmlValue))
+            name <- unlist(xpathApply(query_result, paste0("//result[",i,"]/name"),xmlValue))
+            if(tipo_merc=="hipermercado")
+                {
+                    class <- "Hiper"
+                }
+            else if(tipo_merc=="supermercado")
+                {
+                    class <- "Super"
+                }
+            else if(tipo_merc=="minimercado")
+                {
+                    if(empresa=="carrefour")
+                        {
+                            class <- "Express"
+                        }
+                    else if(empresa=="extra")
+                        {
+                            class <- "Mini"
+                        }
+                    else if(empresa=="pao+de+acucar")
+                        {
+                            class <- "Minuto"
+                        }
+                }
+            numrating="NA"
             type <- unlist(xpathApply(query_result, paste0("//result[",i,"]/type[1]"), xmlValue))
             address <- unlist(xpathApply(query_result, paste0("//result[",i,"]/formatted_address"), xmlValue))
             rating <- unlist(xpathApply(query_result, paste0("//result[",i,"]/rating"), xmlValue))
@@ -147,7 +176,7 @@ get_place <- function(empresa,tipo_merc,uf,region){
 
             if(type == "grocery_or_supermarket" && type_filter && type_filter_neg && type_filter_emp && uf_filter)
                 {
-                    result_table <- cbind(id,name,uf,rating,address)
+                    result_table <- cbind(id,name,uf,class,numrating,rating,address)
 
                     query_table <- rbind(query_table,result_table)
                 }
@@ -157,15 +186,22 @@ get_place <- function(empresa,tipo_merc,uf,region){
     return(query_table)
 }
 
+
+####################
+#   Get Comments   #
+####################
+
+
 get_comments <- function(id_table)
     {
         oldw<-getOption("warn")
         options(warn = -1)
 
-        comments_table <- data.frame(id=character(0),uf=character(0),rating=character(0),comment=character(0))
+        comments_table <- data.frame(id=character(0),uf=character(0),class=character(0),rating=character(0),comment=character(0))
+        num_comments_list <- c()
         for(i in 1:nrow(id_table))
             {
-                query_url <- paste0("https://maps.googleapis.com/maps/api/place/details/xml?placeid=",id_table[i,1],"&key=",api_key)
+                query_url <- paste0("https://maps.googleapis.com/maps/api/place/details/xml?placeid=",id_table[i,1],"&key=",api_key,"&language=pt-BR")
 
                 
                 xml.url <- GET(query_url, accept_xml())
@@ -174,12 +210,14 @@ get_comments <- function(id_table)
                 query_result <- xmlTreeParse(xml.url, useInternalNodes=TRUE)
                 num_comments <- xpathApply(query_result, "count(//result/review)", xmlValue)
                 #print(num_comments)
+                num_comments_list <- c(num_comments_list,num_comments)
                 if(num_comments>0)
                     {
                         for(j in 1:num_comments)
                             {
                                 id <- as.character(id_table[i,1])
-                                uf <- as.character(id_table[i,2])
+                                uf <- as.character(id_table[i,3])
+                                class <- as.character(id_table[i,4])
                                 rating <- unlist(xpathApply(query_result, paste0("//result/review[",j,"]/rating"), xmlValue))
                                 if(is.null(rating))
                                     {
@@ -192,14 +230,18 @@ get_comments <- function(id_table)
                                         comment <- ""
                                     }
 
-                                row_data <- cbind(id,uf,rating,comment)
+                                row_data <- cbind(id,uf,class,rating,comment)
                                 comments_table <- rbind(comments_table,row_data)
                                 #print(row_data)
                             }
                     }
             }
+        id_table$numrating <- as.character(id_table$numrating)
+        id_table$numrating <- num_comments_list
+        id_table$numrating <- as.factor(id_table$numrating)
+
         options(warn=oldw)
-        return(comments_table)
+        return(list(comments_table,id_table))
     }
 
 #Creating Workbook
@@ -248,16 +290,19 @@ uf_city <- list(
 
 
 length_uf <- length(uf_city)
-#length_uf <- 4
+#length_uf <- 6
+
 
 
 ##################
 #    Carrefour   #
 ##################
 
+
 #Hiper
 
-table_hiper_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+
+table_hiper_merc_carr <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 for(i in 1:length_uf)
     {
@@ -268,25 +313,23 @@ for(i in 1:length_uf)
 
                 #print(city_loop)
                 table_hiper_merc_part <- get_place("carrefour","hipermercado",uf_loop,city_loop)
-                table_hiper_merc <- rbind(table_hiper_merc,table_hiper_merc_part)
+                table_hiper_merc_carr <- rbind(table_hiper_merc_carr,table_hiper_merc_part)
             }
     }
 
-dupe <- duplicated(table_hiper_merc)
-table_hiper_merc <- table_hiper_merc[!dupe,]
+dupe <- duplicated(table_hiper_merc_carr)
+table_hiper_merc_carr <- table_hiper_merc_carr[!dupe,]
 
-table_hiper_merc$address <- sapply(table_hiper_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-table_hiper_merc$name <- sapply(table_hiper_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_hiper_merc_carr$address <- sapply(table_hiper_merc_carr$address, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_hiper_merc_carr$name <- sapply(table_hiper_merc_carr$name, function(x) stri_trans_general(x,"Latin-ASCII"))
 
-row_hiper <- nrow(table_hiper_merc)
+row_hiper <- nrow(table_hiper_merc_carr)
 
-write.csv2(table_hiper_merc,paste0("proc_data",slash,"mercados_carrefour_hiper.csv"))
-writeData(workbook,"mercados_carrefour","Hipermercados")
-writeDataTable(workbook,"mercados_carrefour",format(table_hiper_merc,decimal.mark=","),startRow=2)
 
 #Super
 
-table_super_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+
+table_super_merc_carr <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 for(i in 1:length_uf)
     {
@@ -297,25 +340,23 @@ for(i in 1:length_uf)
 
                 #print(city_loop)
                 table_super_merc_part <- get_place("carrefour","supermercado",uf_loop,city_loop)
-                table_super_merc <- rbind(table_super_merc,table_super_merc_part)
+                table_super_merc_carr <- rbind(table_super_merc_carr,table_super_merc_part)
             }
     }
 
-dupe <- duplicated(table_super_merc)
-table_super_merc <- table_super_merc[!dupe,]
+dupe <- duplicated(table_super_merc_carr)
+table_super_merc_carr <- table_super_merc_carr[!dupe,]
 
-table_super_merc$address <- sapply(table_super_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-table_super_merc$name <- sapply(table_super_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_super_merc_carr$address <- sapply(table_super_merc_carr$address, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_super_merc_carr$name <- sapply(table_super_merc_carr$name, function(x) stri_trans_general(x,"Latin-ASCII"))
 
-row_super <- nrow(table_super_merc)
+row_super <- nrow(table_super_merc_carr)
 
-write.csv2(table_super_merc,paste0("proc_data",slash,"mercados_carrefour_super.csv"))
-writeData(workbook,"mercados_carrefour","Supermercados",startRow=row_hiper+4)
-writeDataTable(workbook,"mercados_carrefour",format(table_super_merc,decimal.mark=","),startRow=row_hiper+5)
 
 #Express
 
-table_mini_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+
+table_mini_merc_carr <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 #for(i in 1:length(uf_city))
 for(i in 1:length_uf)
@@ -327,39 +368,116 @@ for(i in 1:length_uf)
 
                 #print(city_loop)
                 table_mini_merc_part <- get_place("carrefour","minimercado",uf_loop,city_loop)
-                table_mini_merc <- rbind(table_mini_merc,table_mini_merc_part)
+                table_mini_merc_carr <- rbind(table_mini_merc_carr,table_mini_merc_part)
             }
     }
 
-dupe <- duplicated(table_mini_merc)
-table_mini_merc <- table_mini_merc[!dupe,]
+dupe <- duplicated(table_mini_merc_carr)
+table_mini_merc_carr <- table_mini_merc_carr[!dupe,]
 
-table_mini_merc$address <- sapply(table_mini_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-table_mini_merc$name <- sapply(table_mini_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_mini_merc_carr$address <- sapply(table_mini_merc_carr$address, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_mini_merc_carr$name <- sapply(table_mini_merc_carr$name, function(x) stri_trans_general(x,"Latin-ASCII"))
 
-row_mini <- nrow(table_mini_merc)
+row_mini <- nrow(table_mini_merc_carr)
 
-write.csv2(table_mini_merc,paste0("proc_data",slash,"mercados_carrefour_exp.csv"))
+
+#Getting Comments
+
+
+carrefour_comments <- data.frame(id=character(0),uf=character(0),class=character(0),rating=character(0),comment=character(0))
+
+if(nrow(table_hiper_merc_carr)>0)
+{
+comments_return <- get_comments(table_hiper_merc_carr)
+carrefour_comments <- rbind(carrefour_comments,comments_return[[1]])
+table_hiper_merc_carr <- comments_return[[2]]
+}
+
+if(nrow(table_super_merc_carr)>0)
+{
+comments_return <- get_comments(table_super_merc_carr)
+carrefour_comments <- rbind(carrefour_comments,comments_return[[1]])
+table_super_merc_carr <- comments_return[[2]]
+}
+
+if(nrow(table_mini_merc_carr)>0)
+{
+comments_return <- get_comments(table_mini_merc_carr)
+carrefour_comments <- rbind(carrefour_comments,comments_return[[1]])
+table_mini_merc_carr <- comments_return[[2]]
+}
+
+
+#Medias
+
+
+mean_hiper_carr <-weighted.mean(
+                            as.numeric(as.character(table_hiper_merc_carr$rating)),
+                            as.numeric(as.character(table_hiper_merc_carr$numrating)),
+                            na.rm=TRUE)
+
+mean_super_carr <-weighted.mean(
+                            as.numeric(as.character(table_super_merc_carr$rating)),
+                            as.numeric(as.character(table_super_merc_carr$numrating)),
+                            na.rm=TRUE)
+
+mean_mini_carr <-weighted.mean(
+                            as.numeric(as.character(table_mini_merc_carr$rating)),
+                            as.numeric(as.character(table_mini_merc_carr$numrating)),
+                            na.rm=TRUE)
+
+mean_total_carr <-weighted.mean(
+                        c(as.numeric(as.character(table_hiper_merc_carr$rating)),
+                          as.numeric(as.character(table_super_merc_carr$rating)),
+                          as.numeric(as.character(table_mini_merc_carr$rating))
+                          ),
+                        c(as.numeric(as.character(table_hiper_merc_carr$numrating)),
+                          as.numeric(as.character(table_super_merc_carr$numrating)),
+                          as.numeric(as.character(table_mini_merc_carr$numrating))
+                          ),
+                        na.rm=TRUE
+                                )
+
+
+mean_carr <- data.frame(
+        name = c("Media Ponderada de Hipermercados",
+                 "Media Ponderada de Supermercados",
+                 "Media Ponderada de Mercados Express",
+                 "Media Ponderada Total"),
+        mean = c(mean_hiper_carr,mean_super_carr,mean_mini_carr,mean_total_carr)
+                        )
+
+#Saving Places
+
+
+write.csv2(table_hiper_merc_carr,paste0("proc_data",slash,"mercados_carrefour_hiper.csv"))
+writeData(workbook,"mercados_carrefour","Hipermercados")
+writeDataTable(workbook,"mercados_carrefour",format(table_hiper_merc_carr,decimal.mark=","),startRow=2)
+
+
+write.csv2(table_super_merc_carr,paste0("proc_data",slash,"mercados_carrefour_super.csv"))
+writeData(workbook,"mercados_carrefour","Supermercados",startRow=row_hiper+4)
+writeDataTable(workbook,"mercados_carrefour",format(table_super_merc_carr,decimal.mark=","),startRow=row_hiper+5)
+
+
+write.csv2(table_mini_merc_carr,paste0("proc_data",slash,"mercados_carrefour_exp.csv"))
 writeData(workbook,"mercados_carrefour","Express",startRow=row_hiper+row_super+7)
-writeDataTable(workbook,"mercados_carrefour",format(table_mini_merc,decimal.mark=","),startRow=row_hiper+row_super+8)
+writeDataTable(workbook,"mercados_carrefour",format(table_mini_merc_carr,decimal.mark=","),startRow=row_hiper+row_super+8)
 
-mean_merc <- data.frame(
-        name = c("Media de Hipermercados",
-                 "Media de Supermercados",
-                 "Media de Mercados Express",
-                 "Media Total"),
-        mean = c(mean(as.numeric(as.character(table_hiper_merc$rating)),na.rm=TRUE),
-                 mean(as.numeric(as.character(table_super_merc$rating)),na.rm=TRUE),
-                 mean(as.numeric(as.character(table_mini_merc$rating)),na.rm=TRUE),
-                 mean(c(as.numeric(as.character(table_hiper_merc$rating)),
-                        as.numeric(as.character(table_super_merc$rating)),
-                        as.numeric(as.character(table_mini_merc$rating))),na.rm=TRUE))
-                    )
+
+#Saving Means
+
+
 writeData(workbook,"mercados_carrefour","Media de Notas",startRow=row_hiper+row_super+row_mini+10)
-writeData(workbook,"mercados_carrefour",format(mean_merc,decimal.mark=","),startRow=row_hiper+row_super+row_mini+11,colNames=FALSE,withFilter=FALSE)
+writeData(workbook,"mercados_carrefour",format(mean_carr,decimal.mark=","),startRow=row_hiper+row_super+row_mini+11,colNames=FALSE,withFilter=FALSE)
 
 
-carrefour_ids <- rbind(table_hiper_merc,table_super_merc,table_mini_merc)[,c(1,3)]
+#Saving Comments
+
+
+write.csv2(carrefour_comments,paste0("proc_data",slash,"comments_carrefour.csv"))
+writeDataTable(workbook,"comentarios_carrefour",format(carrefour_comments,decimal.mark=","))
+
 
 
 
@@ -367,9 +485,11 @@ carrefour_ids <- rbind(table_hiper_merc,table_super_merc,table_mini_merc)[,c(1,3
 #     Extra     #
 #################
 
+
 #Hiper
 
-table_hiper_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+
+table_hiper_merc_ex <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 for(i in 1:length_uf)
     {
@@ -380,25 +500,23 @@ for(i in 1:length_uf)
 
                 #print(city_loop)
                 table_hiper_merc_part <- get_place("extra","hipermercado",uf_loop,city_loop)
-                table_hiper_merc <- rbind(table_hiper_merc,table_hiper_merc_part)
+                table_hiper_merc_ex <- rbind(table_hiper_merc_ex,table_hiper_merc_part)
             }
     }
 
-dupe <- duplicated(table_hiper_merc)
-table_hiper_merc <- table_hiper_merc[!dupe,]
+dupe <- duplicated(table_hiper_merc_ex)
+table_hiper_merc_ex <- table_hiper_merc_ex[!dupe,]
 
-table_hiper_merc$address <- sapply(table_hiper_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-table_hiper_merc$name <- sapply(table_hiper_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_hiper_merc_ex$address <- sapply(table_hiper_merc_ex$address, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_hiper_merc_ex$name <- sapply(table_hiper_merc_ex$name, function(x) stri_trans_general(x,"Latin-ASCII"))
 
-row_hiper <- nrow(table_hiper_merc)
+row_hiper <- nrow(table_hiper_merc_ex)
 
-write.csv2(table_hiper_merc,paste0("proc_data",slash,"mercados_extra_hiper.csv"))
-writeData(workbook,"mercados_extra","Hipermercados")
-writeDataTable(workbook,"mercados_extra",format(table_hiper_merc,decimal.mark=","),startRow=2)
 
 #Super
 
-table_super_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+
+table_super_merc_ex <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 for(i in 1:length_uf)
     {
@@ -409,25 +527,23 @@ for(i in 1:length_uf)
 
                 #print(city_loop)
                 table_super_merc_part <- get_place("extra","supermercado",uf_loop,city_loop)
-                table_super_merc <- rbind(table_super_merc,table_super_merc_part)
+                table_super_merc_ex <- rbind(table_super_merc_ex,table_super_merc_part)
             }
     }
 
-dupe <- duplicated(table_super_merc)
-table_super_merc <- table_super_merc[!dupe,]
+dupe <- duplicated(table_super_merc_ex)
+table_super_merc_ex <- table_super_merc_ex[!dupe,]
 
-table_super_merc$address <- sapply(table_super_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-table_super_merc$name <- sapply(table_super_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_super_merc_ex$address <- sapply(table_super_merc_ex$address, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_super_merc_ex$name <- sapply(table_super_merc_ex$name, function(x) stri_trans_general(x,"Latin-ASCII"))
 
-row_super <- nrow(table_super_merc)
+row_super <- nrow(table_super_merc_ex)
 
-write.csv2(table_super_merc,paste0("proc_data",slash,"mercados_extra_super.csv"))
-writeData(workbook,"mercados_extra","Supermercados",startRow=row_hiper+4)
-writeDataTable(workbook,"mercados_extra",format(table_super_merc,decimal.mark=","),startRow=row_hiper+5)
 
 #Mini
 
-table_mini_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+
+table_mini_merc_ex <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 for(i in 1:length_uf)
     {
@@ -438,38 +554,115 @@ for(i in 1:length_uf)
 
                 #print(city_loop)
                 table_mini_merc_part <- get_place("extra","minimercado",uf_loop,city_loop)
-                table_mini_merc <- rbind(table_mini_merc,table_mini_merc_part)
+                table_mini_merc_ex <- rbind(table_mini_merc_ex,table_mini_merc_part)
             }
     }
 
-dupe <- duplicated(table_mini_merc)
-table_mini_merc <- table_mini_merc[!dupe,]
+dupe <- duplicated(table_mini_merc_ex)
+table_mini_merc_ex <- table_mini_merc_ex[!dupe,]
 
-table_mini_merc$address <- sapply(table_mini_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-table_mini_merc$name <- sapply(table_mini_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_mini_merc_ex$address <- sapply(table_mini_merc_ex$address, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_mini_merc_ex$name <- sapply(table_mini_merc_ex$name, function(x) stri_trans_general(x,"Latin-ASCII"))
 
-row_mini <- nrow(table_mini_merc)
+row_mini <- nrow(table_mini_merc_ex)
 
-write.csv2(table_mini_merc,paste0("proc_data",slash,"mercados_extra_mini.csv"))
+
+#Getting Comments
+
+
+extra_comments <- data.frame(id=character(0),uf=character(0),class=character(0),rating=character(0),comment=character(0))
+
+if(nrow(table_hiper_merc_ex)>0)
+{
+comments_return <- get_comments(table_hiper_merc_ex)
+extra_comments <- rbind(extra_comments,comments_return[[1]])
+table_hiper_merc_ex <- comments_return[[2]]
+}
+
+if(nrow(table_super_merc_ex)>0)
+{
+comments_return <- get_comments(table_super_merc_ex)
+extra_comments <- rbind(extra_comments,comments_return[[1]])
+table_super_merc_ex <- comments_return[[2]]
+}
+
+if(nrow(table_mini_merc_ex)>0)
+{
+comments_return <- get_comments(table_mini_merc_ex)
+extra_comments <- rbind(extra_comments,comments_return[[1]])
+table_mini_merc_ex <- comments_return[[2]]
+}
+
+
+#Medias
+
+
+mean_hiper_ex <-weighted.mean(
+                            as.numeric(as.character(table_hiper_merc_ex$rating)),
+                            as.numeric(as.character(table_hiper_merc_ex$numrating)),
+                            na.rm=TRUE)
+
+mean_super_ex <-weighted.mean(
+                            as.numeric(as.character(table_super_merc_ex$rating)),
+                            as.numeric(as.character(table_super_merc_ex$numrating)),
+                            na.rm=TRUE)
+
+mean_mini_ex <-weighted.mean(
+                            as.numeric(as.character(table_mini_merc_ex$rating)),
+                            as.numeric(as.character(table_mini_merc_ex$numrating)),
+                            na.rm=TRUE)
+
+mean_total_ex <-weighted.mean(
+                        c(as.numeric(as.character(table_hiper_merc_ex$rating)),
+                          as.numeric(as.character(table_super_merc_ex$rating)),
+                          as.numeric(as.character(table_mini_merc_ex$rating))
+                          ),
+                        c(as.numeric(as.character(table_hiper_merc_ex$numrating)),
+                          as.numeric(as.character(table_super_merc_ex$numrating)),
+                          as.numeric(as.character(table_mini_merc_ex$numrating))
+                          ),
+                        na.rm=TRUE
+                                )
+
+
+mean_ex <- data.frame(
+        name = c("Media Ponderada de Hipermercados",
+                 "Media Ponderada de Supermercados",
+                 "Media Ponderada de Minimercados",
+                 "Media Ponderada Total"),
+        mean = c(mean_hiper_ex,mean_super_ex,mean_mini_ex,mean_total_ex)
+                        )
+
+#Saving Places
+
+
+write.csv2(table_hiper_merc_ex,paste0("proc_data",slash,"mercados_extra_hiper.csv"))
+writeData(workbook,"mercados_extra","Hipermercados")
+writeDataTable(workbook,"mercados_extra",format(table_hiper_merc_ex,decimal.mark=","),startRow=2)
+
+
+write.csv2(table_super_merc_ex,paste0("proc_data",slash,"mercados_extra_super.csv"))
+writeData(workbook,"mercados_extra","Supermercados",startRow=row_hiper+4)
+writeDataTable(workbook,"mercados_extra",format(table_super_merc_ex,decimal.mark=","),startRow=row_hiper+5)
+
+
+write.csv2(table_mini_merc_ex,paste0("proc_data",slash,"mercados_extra_mini.csv"))
 writeData(workbook,"mercados_extra","Minimercados",startRow=row_hiper+row_super+7)
-writeDataTable(workbook,"mercados_extra",format(table_mini_merc,decimal.mark=","),startRow=row_hiper+row_super+8)
+writeDataTable(workbook,"mercados_extra",format(table_mini_merc_ex,decimal.mark=","),startRow=row_hiper+row_super+8)
 
-mean_merc <- data.frame(
-        name = c("Media de Hipermercados",
-                 "Media de Supermercados",
-                 "Media de Minimercados",
-                 "Media Total"),
-        mean = c(mean(as.numeric(as.character(table_hiper_merc$rating)),na.rm=TRUE),
-                 mean(as.numeric(as.character(table_super_merc$rating)),na.rm=TRUE),
-                 mean(as.numeric(as.character(table_mini_merc$rating)),na.rm=TRUE),
-                 mean(c(as.numeric(as.character(table_hiper_merc$rating)),
-                        as.numeric(as.character(table_super_merc$rating)),
-                        as.numeric(as.character(table_mini_merc$rating))),na.rm=TRUE))
-                    )
+
+#Saving Means
+
+
 writeData(workbook,"mercados_extra","Media de Notas",startRow=row_hiper+row_super+row_mini+10)
-writeData(workbook,"mercados_extra",format(mean_merc,decimal.mark=","),startRow=row_hiper+row_super+row_mini+11,colNames=FALSE,withFilter=FALSE)
+writeData(workbook,"mercados_extra",format(mean_ex,decimal.mark=","),startRow=row_hiper+row_super+row_mini+11,colNames=FALSE,withFilter=FALSE)
 
-extra_ids <- rbind(table_hiper_merc,table_super_merc,table_mini_merc)[,c(1,3)]
+
+#Saving Comments
+
+
+write.csv2(extra_comments,paste0("proc_data",slash,"comments_extra.csv"))
+writeDataTable(workbook,"comentarios_extra",format(extra_comments,decimal.mark=","))
 
 
 
@@ -477,38 +670,11 @@ extra_ids <- rbind(table_hiper_merc,table_super_merc,table_mini_merc)[,c(1,3)]
 #     Pao de Acucar     #
 #########################
 
-##Hiper
-#
-#table_hiper_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
-#
-#for(i in 1:length_uf)
-#    {
-#        for(j in 1:length(uf_city[[i]][[2]]))
-#            {
-#                uf_loop <- uf_city[[i]][[1]]
-#                city_loop <- uf_city[[i]][[2]][j]
-#
-#                print(city_loop)
-#                table_hiper_merc_part <- get_place("pao+de+acucar","hipermercado",uf_loop,city_loop)
-#                table_hiper_merc <- rbind(table_hiper_merc,table_hiper_merc_part)
-#            }
-#    }
-#
-#dupe <- duplicated(table_hiper_merc)
-#table_hiper_merc <- table_hiper_merc[!dupe,]
-#
-#table_hiper_merc$address <- sapply(table_hiper_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-#table_hiper_merc$name <- sapply(table_hiper_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
-#
-#row_hiper <- nrow(table_hiper_merc)
-#
-#write.csv2(table_hiper_merc,paste0("proc_data",slash,"mercados_pao_acucar_hiper.csv"))
-#writeData(workbook,"mercados_pao_de_acucar","Hipermercados")
-#writeDataTable(workbook,"mercados_pao_de_acucar",format(table_hiper_merc,decimal.mark=","),startRow=2)
 
 #Super
 
-table_super_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+
+table_super_merc_pao <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 for(i in 1:length_uf)
     {
@@ -519,25 +685,23 @@ for(i in 1:length_uf)
 
                 #print(city_loop)
                 table_super_merc_part <- get_place("pao+de+acucar","supermercado",uf_loop,city_loop)
-                table_super_merc <- rbind(table_super_merc,table_super_merc_part)
+                table_super_merc_pao <- rbind(table_super_merc_pao,table_super_merc_part)
             }
     }
 
-dupe <- duplicated(table_super_merc)
-table_super_merc <- table_super_merc[!dupe,]
+dupe <- duplicated(table_super_merc_pao)
+table_super_merc_pao <- table_super_merc_pao[!dupe,]
 
-table_super_merc$address <- sapply(table_super_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-table_super_merc$name <- sapply(table_super_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_super_merc_pao$address <- sapply(table_super_merc_pao$address, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_super_merc_pao$name <- sapply(table_super_merc_pao$name, function(x) stri_trans_general(x,"Latin-ASCII"))
 
-row_super <- nrow(table_super_merc)
+row_super <- nrow(table_super_merc_pao)
 
-write.csv2(table_super_merc,paste0("proc_data",slash,"mercados_pao_acucar_super.csv"))
-writeData(workbook,"mercados_pao_de_acucar","Supermercados",startRow=1)
-writeDataTable(workbook,"mercados_pao_de_acucar",format(table_super_merc,decimal.mark=","),startRow=2)
 
 #Minuto
 
-table_mini_merc <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
+
+table_mini_merc_pao <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 for(i in 1:length_uf)
     {
@@ -548,52 +712,97 @@ for(i in 1:length_uf)
 
                 #print(city_loop)
                 table_mini_merc_part <- get_place("pao+de+acucar","minimercado",uf_loop,city_loop)
-                table_mini_merc <- rbind(table_mini_merc,table_mini_merc_part)
+                table_mini_merc_pao <- rbind(table_mini_merc_pao,table_mini_merc_part)
             }
     }
 
-dupe <- duplicated(table_mini_merc)
-table_mini_merc <- table_mini_merc[!dupe,]
+dupe <- duplicated(table_mini_merc_pao)
+table_mini_merc_pao <- table_mini_merc_pao[!dupe,]
 
-table_mini_merc$address <- sapply(table_mini_merc$address, function(x) stri_trans_general(x,"Latin-ASCII"))
-table_mini_merc$name <- sapply(table_mini_merc$name, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_mini_merc_pao$address <- sapply(table_mini_merc_pao$address, function(x) stri_trans_general(x,"Latin-ASCII"))
+table_mini_merc_pao$name <- sapply(table_mini_merc_pao$name, function(x) stri_trans_general(x,"Latin-ASCII"))
 
-row_mini <- nrow(table_mini_merc)
-
-write.csv2(table_mini_merc,paste0("proc_data",slash,"mercados_pao_acucar_minuto.csv"))
-writeData(workbook,"mercados_pao_de_acucar","Mercados Minuto",startRow=row_super+4)
-writeDataTable(workbook,"mercados_pao_de_acucar",format(table_mini_merc,decimal.mark=","),startRow=row_super+5)
-
-mean_merc <- data.frame(
-        name = c("Media de Supermercados",
-                 "Media de Mercados Minuto",
-                 "Media Total"),
-        mean = c(mean(as.numeric(as.character(table_super_merc$rating)),na.rm=TRUE),
-                 mean(as.numeric(as.character(table_mini_merc$rating)),na.rm=TRUE),
-                 mean(c(as.numeric(as.character(table_super_merc$rating)),
-                        as.numeric(as.character(table_mini_merc$rating))),na.rm=TRUE))
-                    )
-writeData(workbook,"mercados_pao_de_acucar","Media de Notas",startRow=row_super+row_mini+7)
-writeData(workbook,"mercados_pao_de_acucar",format(mean_merc,decimal.mark=","),startRow=row_super+row_mini+8,colNames=FALSE,withFilter=FALSE)
-
-pao_de_acucar_ids <- rbind(table_super_merc,table_mini_merc)[,c(1,3)]
+row_mini <- nrow(table_mini_merc_pao)
 
 
 #Getting Comments
 
-carrefour_comments <- get_comments(carrefour_ids)
-extra_comments <- get_comments(extra_ids)
-pao_de_acucar_comments <- get_comments(pao_de_acucar_ids)
+
+pao_comments <- data.frame(id=character(0),uf=character(0),class=character(0),rating=character(0),comment=character(0))
+
+if(nrow(table_super_merc_pao)>0)
+{
+comments_return <- get_comments(table_super_merc_pao)
+pao_comments <- rbind(pao_comments,comments_return[[1]])
+table_super_merc_pao <- comments_return[[2]]
+}
+
+if(nrow(table_mini_merc_pao)>0)
+{
+comments_return <- get_comments(table_mini_merc_pao)
+pao_comments <- rbind(pao_comments,comments_return[[1]])
+table_mini_merc_pao <- comments_return[[2]]
+}
+
+
+#Medias
+
+
+mean_super_pao <-weighted.mean(
+                            as.numeric(as.character(table_super_merc_pao$rating)),
+                            as.numeric(as.character(table_super_merc_pao$numrating)),
+                            na.rm=TRUE)
+
+mean_mini_pao <-weighted.mean(
+                            as.numeric(as.character(table_mini_merc_pao$rating)),
+                            as.numeric(as.character(table_mini_merc_pao$numrating)),
+                            na.rm=TRUE)
+
+mean_total_pao <-weighted.mean(
+                        c(as.numeric(as.character(table_super_merc_pao$rating)),
+                          as.numeric(as.character(table_mini_merc_pao$rating))
+                          ),
+                        c(as.numeric(as.character(table_super_merc_pao$numrating)),
+                          as.numeric(as.character(table_mini_merc_pao$numrating))
+                          ),
+                        na.rm=TRUE
+                                )
+
+
+mean_pao <- data.frame(
+        name = c("Media Ponderada de Supermercados",
+                 "Media Ponderada de Mercados Minuto",
+                 "Media Ponderada Total"),
+        mean = c(mean_super_pao,mean_mini_pao,mean_total_pao)
+                        )
+
+#Saving Places
+
+
+write.csv2(table_super_merc_pao,paste0("proc_data",slash,"mercados_pao_acucar_super.csv"))
+writeData(workbook,"mercados_pao_de_acucar","Supermercados")
+writeDataTable(workbook,"mercados_pao_de_acucar",format(table_super_merc_pao,decimal.mark=","),startRow=2)
+
+
+write.csv2(table_mini_merc_pao,paste0("proc_data",slash,"mercados_pao_acucar_minuto.csv"))
+writeData(workbook,"mercados_pao_de_acucar","Mercados Minuto",startRow=row_super+4)
+writeDataTable(workbook,"mercados_pao_de_acucar",format(table_mini_merc_pao,decimal.mark=","),startRow=row_super+5)
+
+
+#Saving Means
+
+
+writeData(workbook,"mercados_pao_de_acucar","Media de Notas",startRow=row_super+row_mini+7)
+writeData(workbook,"mercados_pao_de_acucar",format(mean_pao,decimal.mark=","),startRow=row_super+row_mini+8,colNames=FALSE,withFilter=FALSE)
+
 
 #Saving Comments
-write.csv2(carrefour_comments,paste0("proc_data",slash,"comments_carrefour.csv"))
-write.csv2(extra_comments,paste0("proc_data",slash,"comments_extra.csv"))
-write.csv2(pao_de_acucar_comments,paste0("proc_data",slash,"comments_pao_de_acucar.csv"))
 
 
-writeDataTable(workbook,"comentarios_carrefour",format(carrefour_comments,decimal.mark=","))
-writeDataTable(workbook,"comentarios_extra",format(extra_comments,decimal.mark=","))
-writeDataTable(workbook,"comentarios_pao_de_acucar",format(pao_de_acucar_comments,decimal.mark=","))
+write.csv2(pao_comments,paste0("proc_data",slash,"comments_pao_acucar.csv"))
+writeDataTable(workbook,"comentarios_pao_de_acucar",format(pao_comments,decimal.mark=","))
+
+
 
 saveWorkbook(workbook,paste0("Avaliacao-Mercados-",Sys.Date(),".xlsx"),overwrite=TRUE)
 

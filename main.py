@@ -108,9 +108,9 @@ config_path = os.path.abspath(".")+slash+"config.txt"
 
 #google_maps_api
 api_key="AIzaSyCMpuUjGHTIMUvDeD-8NBSHzfiqf6Qi2UQ"
-query_string="hipermercado+carrefour+am"
+#query_string="hipermercado+carrefour+am"
 
-query_response = requests.get("http://maps.googleapis.com/maps/api/place/textsearch/xml?query="+query_string+"&key="+api_key)
+#query_response = requests.get("http://maps.googleapis.com/maps/api/place/textsearch/xml?query="+query_string+"&key="+api_key)
 
 #Building GUI
 
