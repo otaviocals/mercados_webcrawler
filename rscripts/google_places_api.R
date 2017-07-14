@@ -268,17 +268,13 @@ get_place <- function(empresa,tipo_merc,uf,region){
                         {
                             result_table <- cbind(name,uf)
 
-                            #print(result_table)
                         }
                 }
             next_page <- unlist(xpathApply(query_result, "//next_page_token", xmlValue))
-            #print(next_page)
             ####################
             #query_result <- addChildren(query_result,next_query_result)
         }
 
-    #print(uf)
-    #print(num_results)
 
 
     options(warn=oldw)
@@ -309,8 +305,42 @@ get_comments <- function(id_table)
             #XML Parsing
                 query_result <- xmlTreeParse(xml.url, useInternalNodes=TRUE)
                 num_comments <- xpathApply(query_result, "count(//result/review)", xmlValue)
+
+                url <- unlist(xpathApply(query_result, paste0("//result/url"), xmlValue))
+                Sys.sleep(1)
+                url_source <- content(GET(url),as="text")
+                review_pos <- regexpr(" reviews\"",url_source)
+                if(review_pos == -1)
+                    {
+                        total_review <- "0"
+                    }
+                else
+                    {
+                        extr_strg <- substr(url_source,review_pos-6,review_pos+10)
+                        proc_strg <- strsplit(extr_strg,"\"")[[1]][2]
+                        #print(extr_strg)
+                        total_review <- strsplit(proc_strg," review")[[1]][1]
+                        total_review <- gsub(",","",total_review)
+                        #print(total_review)
+                        if(is.na(as.numeric(total_review)))
+                            {
+                                total_review <- "1"
+                            }
+                    }
+
+
+                #print(is.na(as.numeric("1")))
+
+
+                #print(total_review)
+
+                #print(review_pos)
+                #print("Url:")
+                #print(url)
+                #print(extr_string)
+
                 #print(num_comments)
-                num_comments_list <- c(num_comments_list,num_comments)
+                num_comments_list <- c(num_comments_list,total_review)
                 if(num_comments>0)
                     {
                         for(j in 1:num_comments)
@@ -318,11 +348,13 @@ get_comments <- function(id_table)
                                 id <- as.character(id_table[i,1])
                                 uf <- as.character(id_table[i,3])
                                 class <- as.character(id_table[i,4])
+
                                 rating <- unlist(xpathApply(query_result, paste0("//result/review[",j,"]/rating"), xmlValue))
                                 if(is.null(rating))
                                     {
                                         rating <- NA
                                     }
+
                                 comment <- unlist(xpathApply(query_result, paste0("//result/review[",j,"]/text"), xmlValue))
                                 comment <-stri_trans_general(comment,"Latin-ASCII")
                                 if(is.null(comment))
@@ -390,7 +422,7 @@ uf_city <- list(
 
 
 ini_length <- 1
-#ini_length <- 19
+#ini_length <- 21
 
 length_uf <- length(uf_city)
 #length_uf <- 21
@@ -514,6 +546,9 @@ table_mini_merc_carr <- comments_return[[2]]
 #Medias
 
 
+oldw<-getOption("warn")
+options(warn = -1)
+
 mean_hiper_carr <-weighted.mean(
                             as.numeric(as.character(table_hiper_merc_carr$rating)),
                             as.numeric(as.character(table_hiper_merc_carr$numrating)),
@@ -540,6 +575,8 @@ mean_total_carr <-weighted.mean(
                           ),
                         na.rm=TRUE
                                 )
+
+options(warn=oldw)
 
 
 mean_carr <- data.frame(
@@ -700,6 +737,9 @@ table_mini_merc_ex <- comments_return[[2]]
 #Medias
 
 
+oldw<-getOption("warn")
+options(warn = -1)
+
 mean_hiper_ex <-weighted.mean(
                             as.numeric(as.character(table_hiper_merc_ex$rating)),
                             as.numeric(as.character(table_hiper_merc_ex$numrating)),
@@ -726,6 +766,8 @@ mean_total_ex <-weighted.mean(
                           ),
                         na.rm=TRUE
                                 )
+
+options(warn=oldw)
 
 
 mean_ex <- data.frame(
@@ -851,6 +893,9 @@ table_mini_merc_pao <- comments_return[[2]]
 #Medias
 
 
+oldw<-getOption("warn")
+options(warn = -1)
+
 mean_super_pao <-weighted.mean(
                             as.numeric(as.character(table_super_merc_pao$rating)),
                             as.numeric(as.character(table_super_merc_pao$numrating)),
@@ -870,6 +915,8 @@ mean_total_pao <-weighted.mean(
                           ),
                         na.rm=TRUE
                                 )
+
+options(warn=oldw)
 
 
 mean_pao <- data.frame(
