@@ -41,13 +41,13 @@ get_place <- function(empresa,tipo_merc,uf,region){
     #Setting Filter
     if(tipo_merc=="hipermercado")
         {
-            filter_strings <- c("hiper", "hyper", "Hiper", "Hyper")
-            filter_strings_neg <- c("Super","super","Mini","mini","minuto","Minuto","express","Express")
+            filter_strings <- c("Hiper","hiper","Hyper","hyper")
+            filter_strings_neg <- c("Super","super","Mini","mini","minuto","Minuto","express","Express","posto","Posto","bairro","Bairro")
         }
     else if (tipo_merc=="supermercado")
         {
             filter_strings <- c("")
-            filter_strings_neg <- c("Hiper","hiper","Hyper","hyper","Mini","mini","minuto","Minuto","express","Express")
+            filter_strings_neg <- c("Hiper","hiper","Hyper","hyper","Mini","mini","minuto","Minuto","express","Express","padaria","Padaria")
         }
     else if (tipo_merc=="minimercado")
         {
@@ -59,27 +59,36 @@ get_place <- function(empresa,tipo_merc,uf,region){
 
     if(empresa=="carrefour")
         {
+
+            if(tipo_merc=="hipermercado")
+                {
+                    #filter_strings <- c("Hiper","hiper","Hyper","hyper")
+                }
+
             filter_strings_neg <- c(filter_strings_neg,"extra","Extra","p.o","P.o","a..car","A..car","dia","Dia")
+
+            filter_strings_emp <- c("carrefour","Carrefour","CARREFOUR","CRFO","crfo","Crfo")
+
         }
     else if(empresa=="extra")
         {
+
             filter_strings_neg <- c(filter_strings_neg,"carrefour","Carrefour","p.o","P.o","a..car","A..car","bom","Bom")
+
+            filter_strings_emp <- c("extra","Extra","EXTRA")
+
         }
     else if(empresa=="pao+de+acucar")
         {
-            filter_strings_neg <- c(filter_strings_neg,"extra","Extra","carrefour","Carrefour")
-        }
-    filter_strings_neg <- c(filter_strings_neg,"dep.sito","Dep.sito","escrit.rio","Escrit.rio")
 
+            filter_strings_neg <- c(filter_strings_neg,"extra","Extra","carrefour","Carrefour","bondinho","Bondinho")
 
-    if(!empresa=="pao+de+acucar")
-        {
-            filter_strings_emp <- c(empresa,stri_trans_totitle(empresa))
-        }
-    else
-        {
             filter_strings_emp <- c("p.o","a..car","P.o","A..car")
+
         }
+    filter_strings_neg <- c(filter_strings_neg,"dep.sito","Dep.sito","escrit.rio","Escrit.rio","drogaria","Drogaria","farm.cia","Farm.cia")
+
+
 
     #Getting Data
     query_string <- paste0(tipo_merc,"+",empresa,"+",uf)
@@ -88,31 +97,23 @@ get_place <- function(empresa,tipo_merc,uf,region){
             query_string <- paste0(query_string,"+",region)
         }
     #print(query_string)
-    query_url <- paste0("https://maps.googleapis.com/maps/api/place/textsearch/xml?query=",query_string,"&key=",api_key)
+    query_url <- paste0("https://maps.googleapis.com/maps/api/place/textsearch/xml?query=",query_string,"&key=",api_key,"&language=pt-BR")
     #print(query_url)
     xml.url <- GET(query_url, accept_xml())
 
     #XML Parsing
     query_result <- xmlTreeParse(xml.url, useInternalNodes=TRUE)
-
-    next_page <- unlist(xpathApply(query_result, "//next_page_token", xmlValue))
-    while(!is.null(next_page))
-        {
-            Sys.sleep(2)
-            next_query_url <- paste0(query_url,"&pagetoken=",next_page)
-            next_xml.url <- GET(next_query_url,accept_xml())
-            next_query_result <- xmlTreeParse(next_xml.url, useInternalNodes=TRUE)
-            next_page <- unlist(xpathApply(next_query_result, "//next_page_token", xmlValue))
-            #print(next_page)
-            query_result <- addChildren(query_result,next_query_result)
-        }
-
-    num_results <- xpathApply(query_result, "count(//result)", xmlValue)
-    #print(uf)
-    #print(num_results)
+    #if(empresa=="extra")
+    #    {
+    #        print("############################")
+    #        print(map(xmlToList(xmlRoot(query_result))$result,"name"))
+    #    }
+    query_result <- xmlRoot(query_result)
 
     #Data Processing
     query_table <- data.frame(id=character(0),name=character(0),class=character(0),numrating=character(0),rating=character(0),address=character(0))
+
+    num_results <- xpathApply(query_result, "count(//result)", xmlValue)
 
     for(i in 1:num_results)
         {
@@ -180,7 +181,106 @@ get_place <- function(empresa,tipo_merc,uf,region){
 
                     query_table <- rbind(query_table,result_table)
                 }
+            else if(empresa=="extra" && tipo_merc=="hipermercado")
+                {
+                    result_table <- cbind(name,uf)
+
+                    #print(result_table)
+                }
         }
+
+    next_page <- unlist(xpathApply(query_result, "//next_page_token", xmlValue))
+    while(!is.null(next_page))
+        {
+            Sys.sleep(2)
+            next_query_url <- paste0(query_url,"&pagetoken=",next_page)
+            next_xml.url <- GET(next_query_url,accept_xml())
+            next_query_result <- xmlTreeParse(next_xml.url, useInternalNodes=TRUE)
+            query_result <- xmlRoot(next_query_result)
+            num_results <- xpathApply(query_result, "count(//result)", xmlValue)
+            for(i in 1:num_results)
+                {
+                    id <- unlist(xpathApply(query_result, paste0("//result[",i,"]/place_id"), xmlValue))
+                    name <- unlist(xpathApply(query_result, paste0("//result[",i,"]/name"),xmlValue))
+                    if(tipo_merc=="hipermercado")
+                        {
+                            class <- "Hiper"
+                        }
+                    else if(tipo_merc=="supermercado")
+                        {
+                            class <- "Super"
+                        }
+                    else if(tipo_merc=="minimercado")
+                        {
+                            if(empresa=="carrefour")
+                                {
+                                    class <- "Express"
+                                }
+                            else if(empresa=="extra")
+                                {
+                                    class <- "Mini"
+                                }
+                            else if(empresa=="pao+de+acucar")
+                                {
+                                    class <- "Minuto"
+                                }
+                        }
+                    numrating="NA"
+                    type <- unlist(xpathApply(query_result, paste0("//result[",i,"]/type[1]"), xmlValue))
+                    address <- unlist(xpathApply(query_result, paste0("//result[",i,"]/formatted_address"), xmlValue))
+                    rating <- unlist(xpathApply(query_result, paste0("//result[",i,"]/rating"), xmlValue))
+                    if(is.null(rating))
+                        {
+                            rating <- NA
+                        }
+
+                #Filtering Data
+                    #By Market Type
+                    filter_vector <- logical(0)
+                    filter_vector_neg <- logical(0)
+                    filter_vector_emp <- logical(0)
+                    for(i in 1:length(filter_strings))
+                        {
+                            filter_vector <- c(filter_vector,grepl(filter_strings[i],name))
+                        }
+                    for(i in 1:length(filter_strings_neg))
+                        {
+                            filter_vector_neg <- c(filter_vector_neg,grepl(filter_strings_neg[i],name))
+                        }
+                    for(i in 1:length(filter_strings_emp))
+                        {
+                            filter_vector_emp <- c(filter_vector_emp,grepl(filter_strings_emp[i],name))
+                        }
+                    type_filter <- any(filter_vector)
+                    type_filter_neg <- !any(filter_vector_neg)
+                    type_filter_emp <- any(filter_vector_emp)
+                    
+                    #By State
+                    uf_filter <- grepl(uf,address)
+
+                    if(type == "grocery_or_supermarket" && type_filter && type_filter_neg && type_filter_emp && uf_filter)
+                        {
+                            result_table <- cbind(id,name,uf,class,numrating,rating,address)
+
+                            query_table <- rbind(query_table,result_table)
+                        }
+                    else if(empresa=="extra" && tipo_merc=="hipermercado")
+                        {
+                            result_table <- cbind(name,uf)
+
+                            #print(result_table)
+                        }
+                }
+            next_page <- unlist(xpathApply(query_result, "//next_page_token", xmlValue))
+            #print(next_page)
+            ####################
+            #query_result <- addChildren(query_result,next_query_result)
+        }
+
+    #print(uf)
+    #print(num_results)
+
+
     options(warn=oldw)
 
     return(query_table)
@@ -266,7 +366,7 @@ uf_city <- list(
                 list("BA",c("")),
                 list("CE",c("")),
                 list("DF",c("")),
-                list("ES",c("")),
+                list("ES",c("","vila+velha")),
                 list("GO",c("")),
                 list("MA",c("")),
                 list("MT",c("")),
@@ -277,20 +377,23 @@ uf_city <- list(
                 list("PR",c("")),
                 list("PE",c("")),
                 list("PI",c("")),
-                list("RJ",c("")),
+                list("RJ",c("","cachambi")),
                 list("RN",c("")),
                 list("RS",c("")),
                 list("RO",c("")),
                 list("RR",c("")),
                 list("SC",c("")),
-                list("SP",c("sao+paulo","sao+jose+dos+campos","santos","registro","sorocaba","campinas","bauru","central","ribeirao+preto","franca","barretos","marilia","presidente+prudente","aracatuba","sao+jose+do+rio+preto")),
+                list("SP",c("sao+paulo","sao+jose+dos+campos","santos","sorocaba","campinas","ribeirao+preto","aracatuba","sao+jose+do+rio+preto","ABC","diadema","santo+andre","osasco","guaruja","sao+caetano","taubate","piracicaba","jundiai","sao+bernardes")),
                 list("SE",c("")),
                 list("TO",c(""))
                 )
 
 
+ini_length <- 1
+#ini_length <- 19
+
 length_uf <- length(uf_city)
-#length_uf <- 6
+#length_uf <- 21
 
 
 
@@ -304,7 +407,7 @@ length_uf <- length(uf_city)
 
 table_hiper_merc_carr <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
-for(i in 1:length_uf)
+for(i in ini_length:length_uf)
     {
         for(j in 1:length(uf_city[[i]][[2]]))
             {
@@ -331,7 +434,7 @@ row_hiper <- nrow(table_hiper_merc_carr)
 
 table_super_merc_carr <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
-for(i in 1:length_uf)
+for(i in ini_length:length_uf)
     {
         for(j in 1:length(uf_city[[i]][[2]]))
             {
@@ -359,7 +462,7 @@ row_super <- nrow(table_super_merc_carr)
 table_mini_merc_carr <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
 #for(i in 1:length(uf_city))
-for(i in 1:length_uf)
+for(i in ini_length:length_uf)
     {
         for(j in 1:length(uf_city[[i]][[2]]))
             {
@@ -491,7 +594,7 @@ writeDataTable(workbook,"comentarios_carrefour",format(carrefour_comments,decima
 
 table_hiper_merc_ex <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
-for(i in 1:length_uf)
+for(i in ini_length:length_uf)
     {
         for(j in 1:length(uf_city[[i]][[2]]))
             {
@@ -518,7 +621,7 @@ row_hiper <- nrow(table_hiper_merc_ex)
 
 table_super_merc_ex <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
-for(i in 1:length_uf)
+for(i in ini_length:length_uf)
     {
         for(j in 1:length(uf_city[[i]][[2]]))
             {
@@ -545,7 +648,7 @@ row_super <- nrow(table_super_merc_ex)
 
 table_mini_merc_ex <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
-for(i in 1:length_uf)
+for(i in ini_length:length_uf)
     {
         for(j in 1:length(uf_city[[i]][[2]]))
             {
@@ -676,7 +779,7 @@ writeDataTable(workbook,"comentarios_extra",format(extra_comments,decimal.mark="
 
 table_super_merc_pao <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
-for(i in 1:length_uf)
+for(i in ini_length:length_uf)
     {
         for(j in 1:length(uf_city[[i]][[2]]))
             {
@@ -703,7 +806,7 @@ row_super <- nrow(table_super_merc_pao)
 
 table_mini_merc_pao <- data.frame(id=character(0),name=character(0),rating=character(0),address=character(0))
 
-for(i in 1:length_uf)
+for(i in ini_length:length_uf)
     {
         for(j in 1:length(uf_city[[i]][[2]]))
             {
