@@ -1,12 +1,15 @@
-#                                                                                                       #
-#   Just Another Webscraper (J.A.W.)                                                                    #
-#                                    v0.1                                                               #
-#                                                                                                       #
-#       written by Otavio Cals                                                                          #
-#                                                                                                       #
-#   Description: A webscrapper for downloading tables and exporting them to .csv files autonomously.    #
-#                                                                                                       #
-#########################################################################################################
+#########################################
+#                                       #
+#          Mercados-Webscraper          #
+#                v0.1                   #
+#                                       #
+#       written by Otavio Cals          #
+#                                       #
+#    Description: A webscrapper for     #
+#    downloading tables and exporting   #
+#    them to .csv files autonomously.   #
+#                                       #
+#########################################
 
 #Required External Modules: cython, pygame, kivy
 from kivy.app import App
@@ -79,17 +82,13 @@ except:
 
 if current_os.startswith("linux"):
     slash = "/"
-    phantom = "phantomjs/phantomjs"
 elif current_os.startswith("win32") or current_os.startswith("cygwin"):
     slash = "\\"
-    phantom = "phantomjs\\phantomjs.exe"
     import pylibs.win32timezone
 elif current_os.startswith("darwin"):
     slash = "/"
-    phantom = "phantomjs/phantomjs"
 else:
     slash = "/"
-    phantom = "phantomjs/phantomjs"
 
 
 def resource_path(relative_path):
@@ -100,18 +99,32 @@ def resource_path(relative_path):
     return os.path.join(base_path,relative_path)
 
 logo_path = resource_path("logo"+slash+"logo.png")
-phantom_path = resource_path(phantom)
 r_script_path = resource_path("rscripts")
 r_libs_path = resource_path("rlibs")
 kivi_app_path = resource_path("kivylibs"+slash+"app_screen.kv")
 config_path = os.path.abspath(".")+slash+"config.txt"
 
-#google_maps_api
-api_key="AIzaSyCMpuUjGHTIMUvDeD-8NBSHzfiqf6Qi2UQ"
-#query_string="hipermercado+carrefour+am"
 
-#query_response = requests.get("http://maps.googleapis.com/maps/api/place/textsearch/xml?query="+query_string+"&key="+api_key)
+#######################
+#     Config Data     #
+#######################
 
+
+api_key=""
+
+#Loading saved configurations
+
+if(Path(config_path).is_file()):
+    with open(config_path,"r") as f:
+        configs = f.readlines()
+        configs = [x.strip() for x in configs]
+
+        api_key = configs[0][0:len(configs[0])]
+else:
+    with open(config_path,"a") as f:
+        f.write(api_key)
+
+new_api_aky = api_key
 #Building GUI
 
 Builder.load_file(kivi_app_path)
@@ -144,13 +157,6 @@ class AppScreen(GridLayout):
 
         start_time_seconds = time.time()
         self.ids.start_button.disabled = True
-
-    #Running webscraper
-
-        #str_output_logger = []
-        #new_data = Webscraper(sel_folder,log_file,str_output_logger,phantom_path)
-        #self.ids.log_output.text += "".join(str_output_logger)
-        #gc.collect()
 
     #Running R scripts
 
@@ -232,6 +238,20 @@ class AppScreen(GridLayout):
     def _folder_dialog(self):
         XFolder(on_dismiss=self._filepopup_callback, path=expanduser(u'~'))
 
+    def _text_dialog(self):
+        popup = TextPopup()
+
+        popup.title = "Chave API Google Places"
+
+        global new_api_key
+        global api_key
+
+        new_api_key = api_key
+
+        popup.ids.api_dialog.text=new_api_key
+
+        popup.open()
+
 
 #Setting window layout
 
@@ -249,6 +269,26 @@ class AppScreen(GridLayout):
         self.icon = logo_path
         self.ids.ce_logo.source = logo_path
 
+
+class TextPopup(XPopup):
+
+    def _text_popup_callback(self,value):
+        global api_key
+        global new_api_key
+
+        if value:
+            new_api_key = self.ids.api_dialog.text
+            api_key = new_api_key
+            #Saving file
+            with open(config_path,"r") as f:
+                filelines=f.readlines()
+            with open(config_path,"w") as f:
+                f.writelines(api_key+" ")
+            self.dismiss()
+        else:
+            new_api_key = api_key
+            self.dismiss()
+    pass
 
 
 ######################

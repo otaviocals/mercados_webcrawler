@@ -32,6 +32,15 @@
             size: 450, 30
             size_hint: None, None
             id: text_input
+    BoxLayout:
+        orientation: "vertical"
+        XButton:
+            text: "Api Key"
+            on_release: root._text_dialog()
+            size: 150,50
+            size_hint: None, None
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            id: text_button
     FloatLayout:
         ToggleButton:
             text: "Stop" if self.state == "down" else "Start"
@@ -53,3 +62,25 @@
             multiline: True
             readonly: True
             id: log_output
+
+################################
+
+<TextPopup>
+    size_hint:1,.2
+    BoxLayout:
+        orientation:"vertical"
+        TextInput:
+            size_hint:1,.1
+            text: ""
+            hint_text: "Insert Google Places API Key here"
+            multiline: False
+            id:api_dialog
+        BoxLayout:
+            orientation:"horizontal"
+            size_hint: 1,.1
+            XButton:
+                text:"OK"
+                on_release:root._text_popup_callback(True)
+            XButton:
+                text:"Cancel"
+                on_release:root._text_popup_callback(False)

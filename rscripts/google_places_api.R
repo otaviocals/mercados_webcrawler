@@ -308,23 +308,47 @@ get_comments <- function(id_table)
 
                 url <- unlist(xpathApply(query_result, paste0("//result/url"), xmlValue))
                 Sys.sleep(1)
-                url_source <- content(GET(url),as="text")
-                review_pos <- regexpr(" reviews\"",url_source)
-                if(review_pos == -1)
+                url_source <- content(GET(url),as="text",config=timeout(2))
+                reviews_pos <- regexpr(" reviews\"",url_source)
+                review_pos <- regexpr(" review\"",url_source)
+
+                for(j in 1:10)
                     {
-                        total_review <- "0"
-                    }
-                else
-                    {
-                        extr_strg <- substr(url_source,review_pos-6,review_pos+10)
-                        proc_strg <- strsplit(extr_strg,"\"")[[1]][2]
-                        #print(extr_strg)
-                        total_review <- strsplit(proc_strg," review")[[1]][1]
-                        total_review <- gsub(",","",total_review)
-                        #print(total_review)
-                        if(is.na(as.numeric(total_review)))
+                        if(reviews_pos == -1 && review_pos != -1)
                             {
                                 total_review <- "1"
+                                break
+                            }
+                        else if(reviews_pos != -1 && review_pos == -1)
+                            {
+                                extr_strg <- substr(url_source,reviews_pos-6,reviews_pos+10)
+                                proc_strg <- strsplit(extr_strg,"\"")[[1]][2]
+                                total_review <- strsplit(proc_strg," review")[[1]][1]
+                                total_review <- gsub(",","",total_review)
+                                if(is.na(as.numeric(total_review)))
+                                    {
+                                        total_review <- "1"
+                                    }
+                                break
+                            }
+                        else
+                            {
+                                if(is.na(as.character(id_table$rating[i])))
+                                    {
+                                        total_review<- "0"
+                                        break
+                                    }
+                                else
+                                    {
+                                        #print(url)
+                                        #print(reviews_pos)
+                                        #print(review_pos)
+                                        total_review<- "ERR"
+                                    }
+
+                                url_source <- content(GET(url),as="text",config=timeout(2))
+                                reviews_pos <- regexpr(" reviews\"",url_source)
+                                review_pos <- regexpr(" review\"",url_source)
                             }
                     }
 
@@ -422,10 +446,10 @@ uf_city <- list(
 
 
 ini_length <- 1
-#ini_length <- 21
+#ini_length <- 17
 
 length_uf <- length(uf_city)
-#length_uf <- 21
+#length_uf <- 19
 
 
 

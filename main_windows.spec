@@ -6,7 +6,7 @@ a = Analysis(['main.py'],
              pathex=[
 			 'C:\\mercados_webcrawler',
 			 'C:\\Python36-32\\lib\\site-packages'],
-             binaries=[('C:\\susep_webcrawler\\dlls','.')],
+             binaries=None,
              datas=[
 ('pylibs','pylibs'),
 ('logo','logo'),
