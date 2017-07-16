@@ -39,4 +39,5 @@ X-CRAN-Comment: Orphaned on 2017-06-19: all updates have been by the
         CRAN team for some years.
 Repository: CRAN
 Date/Publication: 2017-06-19 12:43:32 UTC
-Built: R 3.4.1; x86_64-pc-linux-gnu; 2017-07-12 03:33:07 UTC; unix
+Built: R 3.4.0; x86_64-w64-mingw32; 2017-06-21 00:59:47 UTC; windows
+Archs: i386, x64

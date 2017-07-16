@@ -99,7 +99,7 @@ get_place <- function(empresa,tipo_merc,uf,region){
     #print(query_string)
     query_url <- paste0("https://maps.googleapis.com/maps/api/place/textsearch/xml?query=",query_string,"&key=",api_key,"&language=pt-BR")
     #print(query_url)
-    xml.url <- GET(query_url, accept_xml())
+    try(suppressMessages(xml.url <- GET(query_url, accept_xml(),timeout(60))))
 
     #XML Parsing
     query_result <- xmlTreeParse(xml.url, useInternalNodes=TRUE)
@@ -194,7 +194,7 @@ get_place <- function(empresa,tipo_merc,uf,region){
         {
             Sys.sleep(2)
             next_query_url <- paste0(query_url,"&pagetoken=",next_page)
-            next_xml.url <- GET(next_query_url,accept_xml())
+            try(suppressMessages(next_xml.url <- GET(next_query_url,accept_xml(),timeout(60))))
             next_query_result <- xmlTreeParse(next_xml.url, useInternalNodes=TRUE)
             query_result <- xmlRoot(next_query_result)
             num_results <- xpathApply(query_result, "count(//result)", xmlValue)
@@ -283,9 +283,9 @@ get_place <- function(empresa,tipo_merc,uf,region){
 }
 
 
-####################
-#   Get Comments   #
-####################
+##########################
+#   Get Comments&Rates   #
+##########################
 
 
 get_comments <- function(id_table)
@@ -300,7 +300,7 @@ get_comments <- function(id_table)
                 query_url <- paste0("https://maps.googleapis.com/maps/api/place/details/xml?placeid=",id_table[i,1],"&key=",api_key,"&language=pt-BR")
 
                 
-                xml.url <- GET(query_url, accept_xml())
+                try(suppressMessages(xml.url <- GET(query_url, accept_xml(),timeout(60))))
 
             #XML Parsing
                 query_result <- xmlTreeParse(xml.url, useInternalNodes=TRUE)
@@ -308,7 +308,7 @@ get_comments <- function(id_table)
 
                 url <- unlist(xpathApply(query_result, paste0("//result/url"), xmlValue))
                 Sys.sleep(1)
-                url_source <- content(GET(url),as="text",config=timeout(2))
+                try(suppressMessages(url_source <- content(GET(url),as="text",timeout(60))))
                 reviews_pos <- regexpr(" reviews\"",url_source)
                 review_pos <- regexpr(" review\"",url_source)
 
@@ -343,27 +343,43 @@ get_comments <- function(id_table)
                                         #print(url)
                                         #print(reviews_pos)
                                         #print(review_pos)
-                                        total_review<- "ERR"
+										reviews_pos <- regexpr("  coment",url_source)
+										if(reviews_pos != -1)
+											{
+												extr_strg <- substr(url_source,reviews_pos-6,reviews_pos+10)
+												proc_strg <- strsplit(extr_strg,"\"")[[1]][2]
+												total_review <- strsplit(proc_strg," comen")[[1]][1]
+												total_review <- gsub(",","",total_review)
+												if(is.na(as.numeric(total_review)))
+													{
+														total_review <- "1"
+													}
+												break
+											}
+										else
+											{
+												if(j<9)
+													{
+														total_review<- "ERR"
+													}
+												else
+													{
+														total_review<- "284"
+														break
+													}
+											}
+                                        
                                     }
 
-                                url_source <- content(GET(url),as="text",config=timeout(2))
+								Sys.sleep(1)
+                                try(suppressMessages(url_source <- content(GET(url),as="text",timeout(60))))
                                 reviews_pos <- regexpr(" reviews\"",url_source)
                                 review_pos <- regexpr(" review\"",url_source)
                             }
                     }
 
 
-                #print(is.na(as.numeric("1")))
-
-
-                #print(total_review)
-
-                #print(review_pos)
-                #print("Url:")
-                #print(url)
-                #print(extr_string)
-
-                #print(num_comments)
+               
                 num_comments_list <- c(num_comments_list,total_review)
                 if(num_comments>0)
                     {

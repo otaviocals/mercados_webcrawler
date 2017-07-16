@@ -28,4 +28,5 @@ NeedsCompilation: yes
 Packaged: 2017-05-20 12:07:21.962471 UTC; edd
 Repository: CRAN
 Date/Publication: 2017-05-22 04:18:02 UTC
-Built: R 3.4.1; x86_64-pc-linux-gnu; 2017-07-12 03:28:18 UTC; unix
+Built: R 3.4.1; x86_64-w64-mingw32; 2017-07-11 18:03:40 UTC; windows
+Archs: i386, x64

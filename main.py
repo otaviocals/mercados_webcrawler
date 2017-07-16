@@ -63,7 +63,7 @@ from pprint import pprint
 Config.set("kivy","log_enable","0")
 Config.set("kivy","log_level","critical")
 Config.set("graphics","position","custom")
-Config.set("graphics","top","10")
+Config.set("graphics","top","100")
 Config.set("graphics","left","10")
 Config.set("graphics","width","450")
 Config.set("graphics","height","750")
